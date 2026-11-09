@@ -3,7 +3,23 @@ import globals from "globals";
 import { globalIgnores, defineConfig } from "eslint/config";
 
 export default defineConfig(
-  globalIgnores(["node_modules", "dist", "esbuild.config.mjs", "eslint.config.mjs", "versions.json", "main.js", "package.json", "package-lock.json", "test"]),
-  { languageOptions: { ecmaVersion: "latest", sourceType: "module", globals: { ...globals.browser } } },
+  globalIgnores([
+    "node_modules",
+    "dist",
+    "esbuild.config.mjs",
+    "eslint.config.mjs",
+    "versions.json",
+    "main.js",
+    "package.json",
+    "package-lock.json",
+    "test",
+  ]),
+  {
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: { ...globals.browser },
+    },
+  },
   ...obsidianmd.configs.recommended,
 );

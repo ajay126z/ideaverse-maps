@@ -11,8 +11,22 @@ const context = await esbuild.context({
   banner: { js: banner },
   entryPoints: ["src/main.js"],
   bundle: true,
-  external: ["obsidian", "electron", "@codemirror/autocomplete", "@codemirror/collab", "@codemirror/commands", "@codemirror/language",
-    "@codemirror/lint", "@codemirror/search", "@codemirror/state", "@codemirror/view", "@lezer/common", "@lezer/highlight", "@lezer/lr", ...builtinModules],
+  external: [
+    "obsidian",
+    "electron",
+    "@codemirror/autocomplete",
+    "@codemirror/collab",
+    "@codemirror/commands",
+    "@codemirror/language",
+    "@codemirror/lint",
+    "@codemirror/search",
+    "@codemirror/state",
+    "@codemirror/view",
+    "@lezer/common",
+    "@lezer/highlight",
+    "@lezer/lr",
+    ...builtinModules,
+  ],
   format: "cjs",
   target: "es2021",
   logLevel: "info",
@@ -21,4 +35,9 @@ const context = await esbuild.context({
   outfile: "main.js",
   minify: prod,
 });
-if (prod) { await context.rebuild(); process.exit(0); } else { await context.watch(); }
+if (prod) {
+  await context.rebuild();
+  process.exit(0);
+} else {
+  await context.watch();
+}

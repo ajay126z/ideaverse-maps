@@ -1,36 +1,111 @@
 import { BaseQ, NeedThis, Unsupported } from "./baseq.js";
-import { Component, FuzzySuggestModal, ItemView, MarkdownRenderer, MarkdownView, Modal, Notice, Platform, TFile, TFolder, normalizePath } from "obsidian";
+import {
+  Component,
+  FuzzySuggestModal,
+  ItemView,
+  MarkdownRenderer,
+  MarkdownView,
+  Modal,
+  Notice,
+  Platform,
+  TFile,
+  TFolder,
+  normalizePath,
+} from "obsidian";
 
 /** Pick a folder in the vault, or type a new one (resolves null if closed without choosing). */
 const SAVED_NAME = "Maps of the Ideaverse - saved views.json";
 
 // Arena (0.8.41): pick a note for an empty slot, from the notes on the map
 export class NotePicker extends FuzzySuggestModal {
-  constructor(app, items, done, ph) { super(app); this.items = items; this.done = done; this.picked = false;
-    this.setPlaceholder(ph || "Put a note in this slot"); this.setInstructions([{ command: "↵", purpose: "choose" }, { command: "esc", purpose: "cancel" }]); }
-  getItems() { return this.items; }
-  getItemText(it) { return it.title; }
-  onChooseItem(it) { this.picked = true; this.done(it.path); }
-  onClose() { super.onClose(); window.setTimeout(() => { if (!this.picked) this.done(null); }, 0); }
+  constructor(app, items, done, ph) {
+    super(app);
+    this.items = items;
+    this.done = done;
+    this.picked = false;
+    this.setPlaceholder(ph || "Put a note in this slot");
+    this.setInstructions([
+      { command: "↵", purpose: "choose" },
+      { command: "esc", purpose: "cancel" },
+    ]);
+  }
+  getItems() {
+    return this.items;
+  }
+  getItemText(it) {
+    return it.title;
+  }
+  onChooseItem(it) {
+    this.picked = true;
+    this.done(it.path);
+  }
+  onClose() {
+    super.onClose();
+    window.setTimeout(() => {
+      if (!this.picked) this.done(null);
+    }, 0);
+  }
 }
 export class FolderPicker extends FuzzySuggestModal {
   constructor(app, done, ph, noNote) {
-    super(app); this.done = done; this.picked = false; this.noNote = !!noNote;
-    this.setPlaceholder(ph || "Where should saved views and tours live? Pick a folder or type a new one");
-    this.setInstructions([{ command: "↵", purpose: "choose" }, { command: "esc", purpose: "cancel" }]);
+    super(app);
+    this.done = done;
+    this.picked = false;
+    this.noNote = !!noNote;
+    this.setPlaceholder(
+      ph ||
+        "Where should saved views and tours live? Pick a folder or type a new one",
+    );
+    this.setInstructions([
+      { command: "↵", purpose: "choose" },
+      { command: "esc", purpose: "cancel" },
+    ]);
   }
-  onOpen() { super.onOpen(); if (this.noNote) return;
-    const note = createDiv({ cls: "ivm-pick-note", text: "You can change this later in Settings → Maps of the Ideaverse → Saved views and tours." });
-    const box = this.inputEl.closest(".prompt-input-container") || this.inputEl.parentElement; box.after(note); }
-  getItems() { return this.app.vault.getAllLoadedFiles().filter(f => f instanceof TFolder); }
-  getItemText(f) { return f.create ? `+ New folder: ${f.create}` : f.isRoot() ? "/ (vault root)" : f.path; }
+  onOpen() {
+    super.onOpen();
+    if (this.noNote) return;
+    const note = createDiv({
+      cls: "ivm-pick-note",
+      text: "You can change this later in Settings → Maps of the Ideaverse → Saved views and tours.",
+    });
+    const box =
+      this.inputEl.closest(".prompt-input-container") ||
+      this.inputEl.parentElement;
+    box.after(note);
+  }
+  getItems() {
+    return this.app.vault
+      .getAllLoadedFiles()
+      .filter((f) => f instanceof TFolder);
+  }
+  getItemText(f) {
+    return f.create
+      ? `+ New folder: ${f.create}`
+      : f.isRoot()
+        ? "/ (vault root)"
+        : f.path;
+  }
   getSuggestions(query) {
-    const res = super.getSuggestions(query), q = normalizePath(query.trim()).replace(/^\/+|\/+$/g, "");
-    if (q && q !== "/" && !(this.app.vault.getAbstractFileByPath(q) instanceof TFolder)) res.push({ item: { create: q }, match: { score: 0, matches: [] } });
+    const res = super.getSuggestions(query),
+      q = normalizePath(query.trim()).replace(/^\/+|\/+$/g, "");
+    if (
+      q &&
+      q !== "/" &&
+      !(this.app.vault.getAbstractFileByPath(q) instanceof TFolder)
+    )
+      res.push({ item: { create: q }, match: { score: 0, matches: [] } });
     return res;
   }
-  onChooseItem(f) { this.picked = true; this.done(f.create ? f.create : f.isRoot() ? "/" : f.path); }
-  onClose() { super.onClose(); window.setTimeout(() => { if (!this.picked) this.done(null); }, 0); }
+  onChooseItem(f) {
+    this.picked = true;
+    this.done(f.create ? f.create : f.isRoot() ? "/" : f.path);
+  }
+  onClose() {
+    super.onClose();
+    window.setTimeout(() => {
+      if (!this.picked) this.done(null);
+    }, 0);
+  }
 }
 import { UI, buildUI } from "./ui.js";
 import { mountMap } from "./mapApp.js";
@@ -42,313 +117,1118 @@ export const VIEW_TYPE = "ideaverse-maps";
 
 /* asks before deleting a note that's open in the map (0.8.298) */
 class DeleteGuard extends Modal {
-  constructor(app, file) { super(app); this.file = file; }
-  onOpen() { const { contentEl } = this; contentEl.createEl("h3", { text: `Delete "${this.file.basename}"?` });
-    contentEl.createEl("p", { text: "It's the note open in Maps of the Ideaverse. It goes to the trash, where you can restore it." });
-    const row = contentEl.createDiv({ cls: "modal-button-container" }); const no = row.createEl("button", { text: "Cancel" }), yes = row.createEl("button", { cls: "mod-warning", text: "Delete" });
-    no.onclick = () => this.close(); yes.onclick = async () => { this.close(); try { await this.app.fileManager.trashFile(this.file); } catch (e) { new Notice(`Couldn't delete ${this.file.basename}: ${e && e.message ? e.message : e}`); } };
-    window.setTimeout(() => no.focus(), 0); }   /* Cancel has the focus, so a stray Enter keeps the note */
-  onClose() { this.contentEl.empty(); } }
+  constructor(app, file) {
+    super(app);
+    this.file = file;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: `Delete "${this.file.basename}"?` });
+    contentEl.createEl("p", {
+      text: "It's the note open in Maps of the Ideaverse. It goes to the trash, where you can restore it.",
+    });
+    const row = contentEl.createDiv({ cls: "modal-button-container" });
+    const no = row.createEl("button", { text: "Cancel" }),
+      yes = row.createEl("button", { cls: "mod-warning", text: "Delete" });
+    no.onclick = () => this.close();
+    yes.onclick = async () => {
+      this.close();
+      try {
+        await this.app.fileManager.trashFile(this.file);
+      } catch (e) {
+        new Notice(
+          `Couldn't delete ${this.file.basename}: ${e && e.message ? e.message : e}`,
+        );
+      }
+    };
+    window.setTimeout(() => no.focus(), 0);
+  } /* Cancel has the focus, so a stray Enter keeps the note */
+  onClose() {
+    this.contentEl.empty();
+  }
+}
 export class MapView extends ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.plugin = plugin;
     this.map = null;
-    this.noteLeaf = null;   // where notes open from the map: one tab beside it, reused
-    this.navigation = false;   // a note opened "here" (the quick switcher, ⌘D) never replaces the map itself
+    this.noteLeaf = null; // where notes open from the map: one tab beside it, reused
+    this.navigation = false; // a note opened "here" (the quick switcher, ⌘D) never replaces the map itself
   }
-  getViewType() { return VIEW_TYPE; }
-  getDisplayText() { return "Maps of the Ideaverse"; }
-  getIcon() { return "orbit"; }
+  getViewType() {
+    return VIEW_TYPE;
+  }
+  getDisplayText() {
+    return "Maps of the Ideaverse";
+  }
+  getIcon() {
+    return "orbit";
+  }
 
-  async onOpen() { await this.reload(); this.keepNotesIn(); }
+  async onOpen() {
+    await this.reload();
+    this.keepNotesIn();
+  }
 
   /* Stay in the map (0.8.218): while the map is the active tab,
-     a note that a command opens in a brand-new tab (⌘D for today's note, the quick switcher, a template…) opens as the primary note instead, and the new tab goes.
-     Tabs that already existed, notes the map itself opens, and the map's own editors are left alone; a note the map doesn't have yet opens as usual */
-  keepNotesIn() { const app = this.app; let prev = null, known = new WeakSet();
-    const snap = () => { known = new WeakSet(); app.workspace.iterateAllLeaves(l => known.add(l)); };
+         a note that a command opens in a brand-new tab (⌘D for today's note, the quick switcher, a template…) opens as the primary note instead, and the new tab goes.
+         Tabs that already existed, notes the map itself opens, and the map's own editors are left alone; a note the map doesn't have yet opens as usual */
+  keepNotesIn() {
+    const app = this.app;
+    let prev = null,
+      known = new WeakSet();
+    const snap = () => {
+      known = new WeakSet();
+      app.workspace.iterateAllLeaves((l) => known.add(l));
+    };
     /* route a note the map should show: as the primary note; one the map doesn't have yet (⌘D, ⌘N) after a quick rescan (only changed notes are read) */
-    const route = f => { if (!this.map) return false; if (this.map.openPrimary(f.path)) return true; if (!this.map.hasNote || this.map.hasNote(f.path)) return false;   /* in the map but filtered out: leave it be */
-      void this.plugin.rescan().then(async () => { for (let t = 0; t < 100 && !(this.map && this.map.openPrimary); t++) await new Promise(r => window.setTimeout(r, 100));
-        if (this.map && !this.map.openPrimary(f.path)) { this.openNote(f.path, true); return; }
+    const route = (f) => {
+      if (!this.map) return false;
+      if (this.map.openPrimary(f.path)) return true;
+      if (!this.map.hasNote || this.map.hasNote(f.path))
+        return false; /* in the map but filtered out: leave it be */
+      void this.plugin.rescan().then(async () => {
+        for (let t = 0; t < 100 && !(this.map && this.map.openPrimary); t++)
+          await new Promise((r) => window.setTimeout(r, 100));
+        if (this.map && !this.map.openPrimary(f.path)) {
+          this.openNote(f.path, true);
+          return;
+        }
         /* a note just made (⌘N, say): put the cursor in its title, ready to name it, as Obsidian does (0.8.221) */
-        if (Date.now() - f.stat.ctime < 8000) for (let t = 0; t < 30; t++) { await new Promise(r => window.setTimeout(r, 100)); const it = this.contentEl.ownerDocument.querySelector(".ivm-card-left:not([hidden]) .inline-title");
-          if (it instanceof HTMLElement) { it.focus(); const sel = window.getSelection(), rg = document.createRange(); rg.selectNodeContents(it); if (sel) { sel.removeAllRanges(); sel.addRange(rg); } break; } } });
-      return true; };
+        if (Date.now() - f.stat.ctime < 8000)
+          for (let t = 0; t < 30; t++) {
+            await new Promise((r) => window.setTimeout(r, 100));
+            const it = this.contentEl.ownerDocument.querySelector(
+              ".ivm-card-left:not([hidden]) .inline-title",
+            );
+            if (it instanceof HTMLElement) {
+              it.focus();
+              const sel = window.getSelection(),
+                rg = document.createRange();
+              rg.selectNodeContents(it);
+              if (sel) {
+                sel.removeAllRanges();
+                sel.addRange(rg);
+              }
+              break;
+            }
+          }
+      });
+      return true;
+    };
     /* only a command does this (0.8.259): a command run while the map is in front (⌘N, ⌘D, ⌘O, a template…)
-       arms it for a minute, and one note is caught; clicking tabs, or anything else, never is */
-    const intent = () => !!this.plugin.cmdIntent && Date.now() - this.plugin.cmdIntent < 60000;
-    if (!this.plugin.cmdPatched) { const C = /** @type {any} */ (app).commands, plugin = this.plugin; if (C && typeof C.executeCommand === "function") { plugin.cmdPatched = true; const oc = C.executeCommand;
-      C.executeCommand = function (cmd, ...rest) {
-        /* "Delete current file" aimed at a note open in the map (its primary or support note, or the map in front) always asks first, by name, even with Obsidian's
-           confirmation off (0.8.298) */
-        try { if (cmd && cmd.id === "app:delete-file") { const f = app.workspace.getActiveFile(), W = app.workspace; let inMap = !!W.getActiveViewOfType(MapView);
-            if (f && !inMap) W.iterateAllLeaves(l => { if (l.ivmCard && l.view && l.view.file && l.view.file.path === f.path) inMap = true; });
-            if (f instanceof TFile && inMap) { new DeleteGuard(app, f).open(); return true; } } } catch { /* never in the way */ }
-        try { const id = cmd && cmd.id ? String(cmd.id) : ""; if (id && !id.startsWith("ideaverse-maps:") && !id.startsWith("workspace:") && app.workspace.getActiveViewOfType(MapView)) plugin.cmdIntent = Date.now(); } catch { /* never in the way */ } return oc.call(this, cmd, ...rest); };
-      plugin.register(() => { C.executeCommand = oc; plugin.cmdPatched = false; }); } }
-    const wants = (leaf, f) => intent() && !!f && !leaf.ivmCard && f instanceof TFile && f.extension === "md" && !!this.map && !!this.map.openPrimary && !known.has(leaf) && app.workspace.getActiveViewOfType(MapView) === this
-      && !(this.plugin.ownOpenT && Date.now() - this.plugin.ownOpenT < 1500) && !(leaf.view && leaf.view.containerEl && this.contentEl.contains(leaf.view.containerEl));
+               arms it for a minute, and one note is caught; clicking tabs, or anything else, never is */
+    const intent = () =>
+      !!this.plugin.cmdIntent && Date.now() - this.plugin.cmdIntent < 60000;
+    if (!this.plugin.cmdPatched) {
+      const C = /** @type {any} */ (app).commands,
+        plugin = this.plugin;
+      if (C && typeof C.executeCommand === "function") {
+        plugin.cmdPatched = true;
+        const oc = C.executeCommand;
+        C.executeCommand = function (cmd, ...rest) {
+          /* "Delete current file" aimed at a note open in the map (its primary or support note, or the map in front) always asks first, by name, even with Obsidian's
+                               confirmation off (0.8.298) */
+          try {
+            if (cmd && cmd.id === "app:delete-file") {
+              const f = app.workspace.getActiveFile(),
+                W = app.workspace;
+              let inMap = !!W.getActiveViewOfType(MapView);
+              if (f && !inMap)
+                W.iterateAllLeaves((l) => {
+                  if (
+                    l.ivmCard &&
+                    l.view &&
+                    l.view.file &&
+                    l.view.file.path === f.path
+                  )
+                    inMap = true;
+                });
+              if (f instanceof TFile && inMap) {
+                new DeleteGuard(app, f).open();
+                return true;
+              }
+            }
+          } catch {
+            /* never in the way */
+          }
+          try {
+            const id = cmd && cmd.id ? String(cmd.id) : "";
+            if (
+              id &&
+              !id.startsWith("ideaverse-maps:") &&
+              !id.startsWith("workspace:") &&
+              app.workspace.getActiveViewOfType(MapView)
+            )
+              plugin.cmdIntent = Date.now();
+          } catch {
+            /* never in the way */
+          }
+          return oc.call(this, cmd, ...rest);
+        };
+        plugin.register(() => {
+          C.executeCommand = oc;
+          plugin.cmdPatched = false;
+        });
+      }
+    }
+    const wants = (leaf, f) =>
+      intent() &&
+      !!f &&
+      !leaf.ivmCard &&
+      f instanceof TFile &&
+      f.extension === "md" &&
+      !!this.map &&
+      !!this.map.openPrimary &&
+      !known.has(leaf) &&
+      app.workspace.getActiveViewOfType(MapView) === this &&
+      !(this.plugin.ownOpenT && Date.now() - this.plugin.ownOpenT < 1500) &&
+      !(
+        leaf.view &&
+        leaf.view.containerEl &&
+        this.contentEl.contains(leaf.view.containerEl)
+      );
     /* no tug-of-war (0.8.226): a brand-new tab about to open a note while the map is in front is caught before it opens,
-       so Obsidian never switches to it; the note goes to the map instead and the empty tab goes. Patched once, for every map */
-    const P = Object.getPrototypeOf(this.leaf); if (P && !this.plugin.openPatched && typeof P.openFile === "function") { this.plugin.openPatched = true; const orig = P.openFile, plugin = this.plugin;
-      P.openFile = function (file, st) { for (const l of plugin.app.workspace.getLeavesOfType(VIEW_TYPE)) { const mv = l.view; if (mv instanceof MapView && mv.catchOpen && mv.catchOpen(this, file)) return Promise.resolve(); } return orig.call(this, file, st); };
+               so Obsidian never switches to it; the note goes to the map instead and the empty tab goes. Patched once, for every map */
+    const P = Object.getPrototypeOf(this.leaf);
+    if (P && !this.plugin.openPatched && typeof P.openFile === "function") {
+      this.plugin.openPatched = true;
+      const orig = P.openFile,
+        plugin = this.plugin;
+      P.openFile = function (file, st) {
+        for (const l of plugin.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+          const mv = l.view;
+          if (mv instanceof MapView && mv.catchOpen && mv.catchOpen(this, file))
+            return Promise.resolve();
+        }
+        return orig.call(this, file, st);
+      };
       /* and the empty tab Obsidian makes first is not brought to the front while the map is: it waits, unseen, for its note (caught above, or opened as usual) */
-      const W = plugin.app.workspace, oSet = W.setActiveLeaf;
-      W.setActiveLeaf = function (leaf, ...rest) { const mv = this.getActiveViewOfType(MapView); if (leaf && mv && mv.holdBack && mv.holdBack(leaf)) return; return oSet.call(this, leaf, ...rest); };
-      plugin.register(() => { P.openFile = orig; W.setActiveLeaf = oSet; plugin.openPatched = false; }); }
-    this.holdBack = leaf => intent() && !leaf.ivmCard && !known.has(leaf) && leaf !== this.leaf && !!leaf.view && leaf.view.getViewType() === "empty" && !(this.plugin.ownOpenT && Date.now() - this.plugin.ownOpenT < 1500);
-    this.catchOpen = (leaf, f) => { if (!wants(leaf, f)) return false; if (!route(f)) return false; this.plugin.cmdIntent = 0; window.setTimeout(() => { try { leaf.detach(); } catch { /* gone */ } app.workspace.setActiveLeaf(this.leaf, { focus: true }); }, 0); return true; };
-    this.registerEvent(app.workspace.on("active-leaf-change", leaf => { const was = prev; prev = leaf;
-      if (leaf === this.leaf) { snap(); return; }
-      if (!intent() || !leaf || was !== this.leaf || known.has(leaf) || !this.map || !this.map.openPrimary) return;
-      if (this.plugin.ownOpenT && Date.now() - this.plugin.ownOpenT < 1500) return;
-      const tryIt = (k_) => { const v = leaf.view; if (!v || (v.containerEl && this.contentEl.contains(v.containerEl))) return;
-        const f = v.getViewType && v.getViewType() === "markdown" ? v.file : null; if (!f) { if (k_ < 6) window.setTimeout(() => tryIt(k_ + 1), 60); return; }
-        if (!route(f)) return; this.plugin.cmdIntent = 0; leaf.detach(); app.workspace.setActiveLeaf(this.leaf, { focus: true }); };
-      tryIt(0); }));
-    if (app.workspace.getActiveViewOfType(MapView) === this) { prev = this.leaf; snap(); } }
-  async onClose() { this.unmount(); }
+      const W = plugin.app.workspace,
+        oSet = W.setActiveLeaf;
+      W.setActiveLeaf = function (leaf, ...rest) {
+        const mv = this.getActiveViewOfType(MapView);
+        if (leaf && mv && mv.holdBack && mv.holdBack(leaf)) return;
+        return oSet.call(this, leaf, ...rest);
+      };
+      plugin.register(() => {
+        P.openFile = orig;
+        W.setActiveLeaf = oSet;
+        plugin.openPatched = false;
+      });
+    }
+    this.holdBack = (leaf) =>
+      intent() &&
+      !leaf.ivmCard &&
+      !known.has(leaf) &&
+      leaf !== this.leaf &&
+      !!leaf.view &&
+      leaf.view.getViewType() === "empty" &&
+      !(this.plugin.ownOpenT && Date.now() - this.plugin.ownOpenT < 1500);
+    this.catchOpen = (leaf, f) => {
+      if (!wants(leaf, f)) return false;
+      if (!route(f)) return false;
+      this.plugin.cmdIntent = 0;
+      window.setTimeout(() => {
+        try {
+          leaf.detach();
+        } catch {
+          /* gone */
+        }
+        app.workspace.setActiveLeaf(this.leaf, { focus: true });
+      }, 0);
+      return true;
+    };
+    this.registerEvent(
+      app.workspace.on("active-leaf-change", (leaf) => {
+        const was = prev;
+        prev = leaf;
+        if (leaf === this.leaf) {
+          snap();
+          return;
+        }
+        if (
+          !intent() ||
+          !leaf ||
+          was !== this.leaf ||
+          known.has(leaf) ||
+          !this.map ||
+          !this.map.openPrimary
+        )
+          return;
+        if (this.plugin.ownOpenT && Date.now() - this.plugin.ownOpenT < 1500)
+          return;
+        const tryIt = (k_) => {
+          const v = leaf.view;
+          if (!v || (v.containerEl && this.contentEl.contains(v.containerEl)))
+            return;
+          const f =
+            v.getViewType && v.getViewType() === "markdown" ? v.file : null;
+          if (!f) {
+            if (k_ < 6) window.setTimeout(() => tryIt(k_ + 1), 60);
+            return;
+          }
+          if (!route(f)) return;
+          this.plugin.cmdIntent = 0;
+          leaf.detach();
+          app.workspace.setActiveLeaf(this.leaf, { focus: true });
+        };
+        tryIt(0);
+      }),
+    );
+    if (app.workspace.getActiveViewOfType(MapView) === this) {
+      prev = this.leaf;
+      snap();
+    }
+  }
+  async onClose() {
+    this.unmount();
+  }
 
   unmount() {
-    if (this.map) { this.map.destroy(); this.map = null; }
-    if (this.mapEvents) { this.removeChild(this.mapEvents); this.mapEvents = null; }   // drops the map's window and document listeners
+    if (this.map) {
+      this.map.destroy();
+      this.map = null;
+    }
+    if (this.mapEvents) {
+      this.removeChild(this.mapEvents);
+      this.mapEvents = null;
+    } // drops the map's window and document listeners
     this.contentEl.empty();
   }
 
   async reload() {
     this.unmount();
-    this.map = await mountInto(this, this.contentEl, { isActive: () => this.app.workspace.getActiveViewOfType(MapView) === this, openNote: (p, t, b) => this.openNote(p, t, b), remount: () => { window.setTimeout(() => { void this.reload(); }, 0); } });
+    this.map = await mountInto(this, this.contentEl, {
+      isActive: () => this.app.workspace.getActiveViewOfType(MapView) === this,
+      openNote: (p, t, b) => this.openNote(p, t, b),
+      remount: () => {
+        window.setTimeout(() => {
+          void this.reload();
+        }, 0);
+      },
+    });
   }
 
-  showStale(c) { const b = this.staleBtn; if (!b) return; b.hidden = false; const t = `${c || "Some"} notes changed · rescan`; b.setAttribute("aria-label", t); b.title = t; const n = b.querySelector(".tbadge"); if (n) n.setText(String(c || "")); }
+  showStale(c) {
+    const b = this.staleBtn;
+    if (!b) return;
+    b.hidden = false;
+    const t = `${c || "Some"} notes changed · rescan`;
+    b.setAttribute("aria-label", t);
+    b.title = t;
+    const n = b.querySelector(".tbadge");
+    if (n) n.setText(String(c || ""));
+  }
 
   /** Where the saved views and tours file lives (null until a folder is picked). */
   savedPath() {
-    const dir = this.plugin.settings.viewsFolder; if (!dir) return null;
+    const dir = this.plugin.settings.viewsFolder;
+    if (!dir) return null;
     const d = dir === "/" ? "" : normalizePath(dir);
     return normalizePath(d ? `${d}/${SAVED_NAME}` : SAVED_NAME);
   }
 
-  openNote(path, newTab, background) { this.plugin.ownOpenT = Date.now(); this.noteLeaf = openBeside(this.app, this.leaf, this.noteLeaf, path, newTab, background); }
+  openNote(path, newTab, background) {
+    this.plugin.ownOpenT = Date.now();
+    this.noteLeaf = openBeside(
+      this.app,
+      this.leaf,
+      this.noteLeaf,
+      path,
+      newTab,
+      background,
+    );
+  }
 }
 
 /** Open a note from the map: in one note pane beside it, reused (a new tab when asked). Returns the pane used. */
 export function openBeside(app, ownLeaf, noteLeaf, path, newTab, background) {
   const file = app.vault.getAbstractFileByPath(path);
   if (!(file instanceof TFile)) return noteLeaf;
-  const ws = app.workspace, notes = ws.getLeavesOfType("markdown");
+  const ws = app.workspace,
+    notes = ws.getLeavesOfType("markdown");
   // a note pane beside the map: one you can see (a note in a tab hidden behind another tab doesn't count), not in the map's own tab group
-  const shown = l => { const el = l.view && l.view.containerEl; return !!el && el.isConnected && el.offsetParent !== null; };
-  const beside = l => l !== ownLeaf && (!ownLeaf || l.parent !== ownLeaf.parent) && shown(l);
-  let leaf = notes.includes(noteLeaf) && beside(noteLeaf) ? noteLeaf : notes.find(beside);
-  if (newTab === "split") leaf = ws.getLeaf("split", "vertical");   // ⌘⌥-click: a split to the right, as in Obsidian (0.8.189)
-  else if (newTab) leaf = ws.getLeftLeaf(false) || ws.getLeaf("tab");   // ⌘-click: a new tab in the left sidebar, so the map stays in view
+  const shown = (l) => {
+    const el = l.view && l.view.containerEl;
+    return !!el && el.isConnected && el.offsetParent !== null;
+  };
+  const beside = (l) =>
+    l !== ownLeaf && (!ownLeaf || l.parent !== ownLeaf.parent) && shown(l);
+  let leaf =
+    notes.includes(noteLeaf) && beside(noteLeaf)
+      ? noteLeaf
+      : notes.find(beside);
+  if (newTab === "split")
+    leaf = ws.getLeaf("split", "vertical"); // ⌘⌥-click: a split to the right, as in Obsidian (0.8.189)
+  else if (newTab)
+    leaf = ws.getLeftLeaf(false) || ws.getLeaf("tab"); // ⌘-click: a new tab in the left sidebar, so the map stays in view
   else if (!leaf) leaf = ws.getLeaf("split", "vertical");
-  if (background && leaf.view && leaf.view.file === file) return newTab ? noteLeaf : leaf;   // already showing it
-  void leaf.openFile(file, background ? { active: false } : undefined);   // in the background the map keeps focus
+  if (background && leaf.view && leaf.view.file === file)
+    return newTab ? noteLeaf : leaf; // already showing it
+  void leaf.openFile(file, background ? { active: false } : undefined); // in the background the map keeps focus
   if (!background) void ws.revealLeaf(leaf);
   return newTab ? noteLeaf : leaf;
 }
 
 /** Scan (or reuse the scan), then mount a map into el. owner: the MapView or Bases view that hosts it (a Component with app, plugin). */
 export async function mountInto(owner, el, opts) {
-  const app = owner.app, plugin = owner.plugin;
-  el.empty(); el.addClass("ivm-host");
+  const app = owner.app,
+    plugin = owner.plugin;
+  el.empty();
+  el.addClass("ivm-host");
   const wait = el.createDiv({ cls: "ivm-loading" });
   wait.createDiv({ cls: "ivm-loading-t", text: "Mapping your notes…" });
   const bar = wait.createDiv({ cls: "ivm-loading-bar" }).createDiv();
   const msg = wait.createDiv({ cls: "ivm-loading-m" });
   let graph;
   try {
-    graph = await plugin.getGraph((done, total) => { bar.setCssProps({ "--p": String(done / Math.max(1, total)) }); msg.setText(`${done.toLocaleString()} of ${total.toLocaleString()} notes read`); });
+    graph = await plugin.getGraph((done, total) => {
+      bar.setCssProps({ "--p": String(done / Math.max(1, total)) });
+      msg.setText(
+        `${done.toLocaleString()} of ${total.toLocaleString()} notes read`,
+      );
+    });
   } catch (e) {
     console.error("Maps of the Ideaverse: scan failed", e);
-    wait.empty(); wait.createDiv({ cls: "ivm-loading-t", text: "The scan failed. See the developer console for details." });
+    wait.empty();
+    wait.createDiv({
+      cls: "ivm-loading-t",
+      text: "The scan failed. See the developer console for details.",
+    });
     return null;
   }
   wait.remove();
-  if (!graph.nodes.length) { el.createDiv({ cls: "ivm-loading" }).createDiv({ cls: "ivm-loading-t", text: "No notes to map yet." }); return null; }
+  if (!graph.nodes.length) {
+    el.createDiv({ cls: "ivm-loading" }).createDiv({
+      cls: "ivm-loading-t",
+      text: "No notes to map yet.",
+    });
+    return null;
+  }
   // the map's data is changed in place by the map (levels during the time-lapse), so each view gets its own copy
   const D = structuredClone(graph);
-  let cardLinkCb = null;   // Edit mode: where a link clicked in a card goes (set by the map)
-  el.addClass("ivm-host"); const root = el.createDiv({ cls: "ivm" });
+  let cardLinkCb = null; // Edit mode: where a link clicked in a card goes (set by the map)
+  el.addClass("ivm-host");
+  const root = el.createDiv({ cls: "ivm" });
   buildUI(root, UI);
-  const stale = root.querySelector("header").createEl("button", { cls: "chip ivm-stale", text: "↻ Notes changed · rescan" });
-  stale.hidden = !plugin.dirty; stale.dataset.count = String(plugin.changed ? plugin.changed.size : 0);
-  stale.addEventListener("click", () => { void plugin.rescan(); });
+  const stale = root.querySelector("header").createEl("button", {
+    cls: "chip ivm-stale",
+    text: "↻ Notes changed · rescan",
+  });
+  stale.hidden = !plugin.dirty;
+  stale.dataset.count = String(plugin.changed ? plugin.changed.size : 0);
+  stale.addEventListener("click", () => {
+    void plugin.rescan();
+  });
   owner.staleBtn = stale;
   if (owner.mapEvents) owner.removeChild(owner.mapEvents);
-  const events = owner.mapEvents = owner.addChild(new Component());
+  const events = (owner.mapEvents = owner.addChild(new Component()));
   const savedPath = () => {
-    const dir = plugin.settings.viewsFolder; if (!dir) return null;
+    const dir = plugin.settings.viewsFolder;
+    if (!dir) return null;
     const d = dir === "/" ? "" : normalizePath(dir);
-    return normalizePath(d ? `${d}/${SAVED_NAME}` : SAVED_NAME); };
+    return normalizePath(d ? `${d}/${SAVED_NAME}` : SAVED_NAME);
+  };
   const map = mountMap(root, D, {
     store: opts.store || plugin.store,
     embed: !!opts.embed,
     isActive: opts.isActive,
-    registerDomEvent: (target, type, fn, o) => events.registerDomEvent(target, type, fn, o),
+    registerDomEvent: (target, type, fn, o) =>
+      events.registerDomEvent(target, type, fn, o),
     openNote: opts.openNote,
     remount: opts.remount,
-    exts: () => plugin.exts || [],   // extensions other plugins registered through plugin.api (0.9.147)
+    exts: () => plugin.exts || [], // extensions other plugins registered through plugin.api (0.9.147)
     // saved views and tours live in one JSON file, in a folder the user picks before the first save
     // PKM Planet's map art: a full-size image from the vault if one is set in Settings, otherwise the small built-in one
-    creatorSrc: () => { const v = plugin.settings.creatorImage; if (v) { const f = app.vault.getAbstractFileByPath(normalizePath(v)); if (f instanceof TFile) return {src: app.vault.getResourcePath(f), disc: false}; } return {src: CREATOR_IMG, disc: true}; },
-    planetSrc: () => { const v = plugin.settings.planetImage; if (v) { const f = app.vault.getAbstractFileByPath(normalizePath(v)); if (f instanceof TFile) return app.vault.getResourcePath(f); } return PLANET_IMG; },
+    creatorSrc: () => {
+      const v = plugin.settings.creatorImage;
+      if (v) {
+        const f = app.vault.getAbstractFileByPath(normalizePath(v));
+        if (f instanceof TFile)
+          return { src: app.vault.getResourcePath(f), disc: false };
+      }
+      return { src: CREATOR_IMG, disc: true };
+    },
+    planetSrc: () => {
+      const v = plugin.settings.planetImage;
+      if (v) {
+        const f = app.vault.getAbstractFileByPath(normalizePath(v));
+        if (f instanceof TFile) return app.vault.getResourcePath(f);
+      }
+      return PLANET_IMG;
+    },
     // Posters: a note's properties, and a picture a note links to (wikilink or vault path)
-    readText: async (path) => { const f = app.vault.getAbstractFileByPath(path); return f instanceof TFile ? app.vault.cachedRead(f) : null; },   // Linear Calendar reads the year's theme from its Preview note
-    frontmatter: (path) => { const f = app.vault.getAbstractFileByPath(path); return f instanceof TFile ? (app.metadataCache.getFileCache(f)?.frontmatter || null) : null; },
-    resource: (link, from) => { if (!link) return null; const f = app.metadataCache.getFirstLinkpathDest(link, from || "") || app.vault.getAbstractFileByPath(normalizePath(link)); return f instanceof TFile ? app.vault.getResourcePath(f) : null; },
+    readText: async (path) => {
+      const f = app.vault.getAbstractFileByPath(path);
+      return f instanceof TFile ? app.vault.cachedRead(f) : null;
+    }, // Linear Calendar reads the year's theme from its Preview note
+    frontmatter: (path) => {
+      const f = app.vault.getAbstractFileByPath(path);
+      return f instanceof TFile
+        ? app.metadataCache.getFileCache(f)?.frontmatter || null
+        : null;
+    },
+    resource: (link, from) => {
+      if (!link) return null;
+      const f =
+        app.metadataCache.getFirstLinkpathDest(link, from || "") ||
+        app.vault.getAbstractFileByPath(normalizePath(link));
+      return f instanceof TFile ? app.vault.getResourcePath(f) : null;
+    },
     // Show the way home: the note it heads for by default (Settings), if one is set
-    wayHome: () => plugin.settings.wayHome || (plugin.settings.homeNotes || [])[0] || "",
+    wayHome: () =>
+      plugin.settings.wayHome || (plugin.settings.homeNotes || [])[0] || "",
     // filter by a base's view: every base in the vault with its views, and the notes a view holds (read from the .base file; see baseq.js)
-    baseList: async () => { const q = plugin.baseQ || (plugin.baseQ = new BaseQ(app)); const list = q.listBases();
-      for (const b of list) { const r = await q.readBase(b.path); b.err = r ? r.err || null : "the file"; b.views = r ? r.views.map(v => ({ name: v.name, type: v.type, err: v.err, ctx: v.ctx })) : []; } return list; },
-    baseNotes: async (path, viewName, thisPath) => { const q = plugin.baseQ || (plugin.baseQ = new BaseQ(app)); q.back = null; const r = await q.readBase(path); if (!r) return { err: "the base is gone" };
-      const v = r.views.find(x => x.name === viewName); if (!v) return { err: "the view is gone" }; if (v.err) return { err: v.err };
-      try { return { paths: [...q.run(v, thisPath || null)] }; } catch (e) { if (e instanceof NeedThis) return { need: "this" }; if (e instanceof Unsupported) { v.err = e.what; return { err: e.what }; } console.warn("Maps of the Ideaverse: couldn't read the base", path, e); return { err: String(e && e.message || e) }; } },
+    baseList: async () => {
+      const q = plugin.baseQ || (plugin.baseQ = new BaseQ(app));
+      const list = q.listBases();
+      for (const b of list) {
+        const r = await q.readBase(b.path);
+        b.err = r ? r.err || null : "the file";
+        b.views = r
+          ? r.views.map((v) => ({
+              name: v.name,
+              type: v.type,
+              err: v.err,
+              ctx: v.ctx,
+            }))
+          : [];
+      }
+      return list;
+    },
+    baseNotes: async (path, viewName, thisPath) => {
+      const q = plugin.baseQ || (plugin.baseQ = new BaseQ(app));
+      q.back = null;
+      const r = await q.readBase(path);
+      if (!r) return { err: "the base is gone" };
+      const v = r.views.find((x) => x.name === viewName);
+      if (!v) return { err: "the view is gone" };
+      if (v.err) return { err: v.err };
+      try {
+        return { paths: [...q.run(v, thisPath || null)] };
+      } catch (e) {
+        if (e instanceof NeedThis) return { need: "this" };
+        if (e instanceof Unsupported) {
+          v.err = e.what;
+          return { err: e.what };
+        }
+        console.warn("Maps of the Ideaverse: couldn't read the base", path, e);
+        return { err: String((e && e.message) || e) };
+      }
+    },
     // emoji labels: one column of a base (by default the ✨ column of a base called Recents), read for every note
-    emojis: async () => { const q = plugin.baseQ || (plugin.baseQ = new BaseQ(app)); const st = plugin.settings; let path = st.emojiBase || "";
-      if (!path) { const f = app.vault.getFiles().find(x => x.extension === "base" && x.basename.toLowerCase() === "recents"); path = f ? f.path : ""; }
+    emojis: async () => {
+      const q = plugin.baseQ || (plugin.baseQ = new BaseQ(app));
+      const st = plugin.settings;
+      let path = st.emojiBase || "";
+      if (!path) {
+        const f = app.vault
+          .getFiles()
+          .find(
+            (x) =>
+              x.extension === "base" && x.basename.toLowerCase() === "recents",
+          );
+        path = f ? f.path : "";
+      }
       if (!path) return { err: "Pick a base for emoji labels in Settings" };
-      try { const r = await q.column(path, st.emojiCol || ""); return r.err ? { err: r.err, path } : { map: r.map, path, col: r.col }; } catch (e) { return { err: String(e && e.message || e), path }; } },
+      try {
+        const r = await q.column(path, st.emojiCol || "");
+        return r.err ? { err: r.err, path } : { map: r.map, path, col: r.col };
+      } catch (e) {
+        return { err: String((e && e.message) || e), path };
+      }
+    },
     // the views file's folder is a plugin setting, which another device may not have:
     // with no folder set, adopt the folder of a views file already in the vault (the newest, if there are several)
-    savedFolder: () => { const st = plugin.settings; if (!st.viewsFolder) { const fs = app.vault.getFiles().filter(f => f.name === SAVED_NAME).sort((a, b) => b.stat.mtime - a.stat.mtime);
-        if (fs.length) { st.viewsFolder = fs[0].parent && fs[0].parent.path !== "/" ? fs[0].parent.path : "/"; void plugin.saveSettings(); } }
-      return st.viewsFolder || null; },
+    savedFolder: () => {
+      const st = plugin.settings;
+      if (!st.viewsFolder) {
+        const fs = app.vault
+          .getFiles()
+          .filter((f) => f.name === SAVED_NAME)
+          .sort((a, b) => b.stat.mtime - a.stat.mtime);
+        if (fs.length) {
+          st.viewsFolder =
+            fs[0].parent && fs[0].parent.path !== "/" ? fs[0].parent.path : "/";
+          void plugin.saveSettings();
+        }
+      }
+      return st.viewsFolder || null;
+    },
     // the file changing under us (a sync from another device, or an edit): hand its text over, skipping our own writes
-    onSavedChange: cb => { const h = async f => { if (!(f instanceof TFile) || f.name !== SAVED_NAME) return; if (!plugin.settings.viewsFolder) { plugin.settings.viewsFolder = f.parent && f.parent.path !== "/" ? f.parent.path : "/"; await plugin.saveSettings(); }
-        if (f.path !== savedPath()) return; const t = await app.vault.read(f); if (t === plugin.lastSavedText) return; cb(t); };
-      events.registerEvent(app.vault.on("modify", h)); events.registerEvent(app.vault.on("create", h)); },
+    onSavedChange: (cb) => {
+      const h = async (f) => {
+        if (!(f instanceof TFile) || f.name !== SAVED_NAME) return;
+        if (!plugin.settings.viewsFolder) {
+          plugin.settings.viewsFolder =
+            f.parent && f.parent.path !== "/" ? f.parent.path : "/";
+          await plugin.saveSettings();
+        }
+        if (f.path !== savedPath()) return;
+        const t = await app.vault.read(f);
+        if (t === plugin.lastSavedText) return;
+        cb(t);
+      };
+      events.registerEvent(app.vault.on("modify", h));
+      events.registerEvent(app.vault.on("create", h));
+    },
     pickSavedFolder: async () => {
-      const dir = await new Promise(res => new FolderPicker(app, res).open());
+      const dir = await new Promise((res) => new FolderPicker(app, res).open());
       if (!dir) return null;
-      plugin.settings.viewsFolder = dir; await plugin.saveSettings(); return dir; },
-    readSaved: async () => { const f = app.vault.getAbstractFileByPath(savedPath()); return f instanceof TFile ? await app.vault.read(f) : null; },
-    writeSaved: async text => { if (opts.embed) return null;   // a map embedded in a note reads the views file, never writes it
-      const path = savedPath(); if (!path) return null;
-      const dir = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
-      if (dir && !app.vault.getAbstractFileByPath(dir)) await app.vault.createFolder(dir);
+      plugin.settings.viewsFolder = dir;
+      await plugin.saveSettings();
+      return dir;
+    },
+    readSaved: async () => {
+      const f = app.vault.getAbstractFileByPath(savedPath());
+      return f instanceof TFile ? await app.vault.read(f) : null;
+    },
+    writeSaved: async (text) => {
+      if (opts.embed) return null; // a map embedded in a note reads the views file, never writes it
+      const path = savedPath();
+      if (!path) return null;
+      const dir = path.includes("/")
+        ? path.slice(0, path.lastIndexOf("/"))
+        : "";
+      if (dir && !app.vault.getAbstractFileByPath(dir))
+        await app.vault.createFolder(dir);
       const f = app.vault.getAbstractFileByPath(path);
-      plugin.lastSavedText = text; if (f instanceof TFile) await app.vault.process(f, () => text); else await app.vault.create(path, text);
-      return path; },
+      plugin.lastSavedText = text;
+      if (f instanceof TFile) await app.vault.process(f, () => text);
+      else await app.vault.create(path, text);
+      return path;
+    },
     // Capture: a picture or clip saved where the vault keeps attachments (Settings → Files and links), then opened on request
     saveCapture: async (name, buf) => {
-      const path = await app.fileManager.getAvailablePathForAttachment(name, (app.workspace.getActiveFile() || {}).path || "");
-      const dir = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
-      if (dir && !app.vault.getAbstractFileByPath(dir)) await app.vault.createFolder(dir);
-      await app.vault.createBinary(path, buf); return path; },
-    openFile: path => { const f = app.vault.getAbstractFileByPath(path); if (f instanceof TFile) { plugin.ownOpenT = Date.now(); void app.workspace.getLeaf("tab").openFile(f); } },
+      const path = await app.fileManager.getAvailablePathForAttachment(
+        name,
+        (app.workspace.getActiveFile() || {}).path || "",
+      );
+      const dir = path.includes("/")
+        ? path.slice(0, path.lastIndexOf("/"))
+        : "";
+      if (dir && !app.vault.getAbstractFileByPath(dir))
+        await app.vault.createFolder(dir);
+      await app.vault.createBinary(path, buf);
+      return path;
+    },
+    openFile: (path) => {
+      const f = app.vault.getAbstractFileByPath(path);
+      if (f instanceof TFile) {
+        plugin.ownOpenT = Date.now();
+        void app.workspace.getLeaf("tab").openFile(f);
+      }
+    },
     // Edit mode (experimental): a real Obsidian editor (Live Preview, links, other plugins) in the map's card. The leaf lives in a split of
     // our own that isn't part of the workspace layout, so it's never saved there (the technique the Hover Editor plugin uses)
-    onCardLink: cb => { cardLinkCb = cb; },
+    onCardLink: (cb) => {
+      cardLinkCb = cb;
+    },
     editCard: () => {
-      const W = app.workspace, Split = W.rootSplit.constructor, split = new Split(W, "vertical");
-      split.getRoot = () => W.rootSplit; split.getContainer = () => W.rootSplit;
+      const W = app.workspace,
+        Split = W.rootSplit.constructor,
+        split = new Split(W, "vertical");
+      split.getRoot = () => W.rootSplit;
+      split.getContainer = () => W.rootSplit;
       let leaf = null;
       // a link clicked in the card stays on the map (Obsidian would open it in a tab): the map picks that note, and ⌘-click makes it the support note
-      if (!plugin.linkPatched) { plugin.linkPatched = true; const W0 = app.workspace, orig = W0.openLinkText;
-        W0.openLinkText = function (linktext, sourcePath, newLeaf, ...rest) { const cd = plugin.cardDown;
-          if (cd && performance.now() - cd.t < 1500 && cd.el.isConnected) { plugin.cardDown = null;
-            const f = app.metadataCache.getFirstLinkpathDest(String(linktext).split("#")[0].split("|")[0], sourcePath || "");
-            if (f instanceof TFile && cd.cb(f.path, newLeaf === "split" ? "side" : newLeaf ? "tab" : "plain")) return Promise.resolve(); }
-          return orig.call(this, linktext, sourcePath, newLeaf, ...rest); };
-        plugin.register(() => { W0.openLinkText = orig; }); }
-      split.containerEl.addEventListener("pointerdown", e => { if (cardLinkCb) plugin.cardDown = { t: performance.now(), el: split.containerEl, cb: cardLinkCb, shift: e.shiftKey }; }, true);
+      if (!plugin.linkPatched) {
+        plugin.linkPatched = true;
+        const W0 = app.workspace,
+          orig = W0.openLinkText;
+        W0.openLinkText = function (linktext, sourcePath, newLeaf, ...rest) {
+          const cd = plugin.cardDown;
+          if (cd && performance.now() - cd.t < 1500 && cd.el.isConnected) {
+            plugin.cardDown = null;
+            const f = app.metadataCache.getFirstLinkpathDest(
+              String(linktext).split("#")[0].split("|")[0],
+              sourcePath || "",
+            );
+            if (
+              f instanceof TFile &&
+              cd.cb(
+                f.path,
+                newLeaf === "split" ? "side" : newLeaf ? "tab" : "plain",
+              )
+            )
+              return Promise.resolve();
+          }
+          return orig.call(this, linktext, sourcePath, newLeaf, ...rest);
+        };
+        plugin.register(() => {
+          W0.openLinkText = orig;
+        });
+      }
+      split.containerEl.addEventListener(
+        "pointerdown",
+        (e) => {
+          if (cardLinkCb)
+            plugin.cardDown = {
+              t: performance.now(),
+              el: split.containerEl,
+              cb: cardLinkCb,
+              shift: e.shiftKey,
+            };
+        },
+        true,
+      );
       /* the editor you're typing in is the active one, so editor hotkeys (move line, indent…) reach it: Obsidian alone finds only the map's tab under the pointer
-         (0.9.50). A click on the map hands it back to the map, as before */
-      let aeInfo = null;   /* Obsidian's active editor, the way Canvas sets it for its cards (a file info, not a view: our leaf has no tab group, so it can't be the active leaf) */
-      split.containerEl.addEventListener("focusin", () => { if (Platform.isMobile) return; window.setTimeout(() => { const v = leaf && leaf.view; if (!v || !v.editor || !split.containerEl.contains(document.activeElement)) return;
-        aeInfo = new Proxy(v, { getPrototypeOf: () => Object.prototype, get: (t, k) => { const x = Reflect.get(t, k, t); return typeof x === "function" ? x.bind(t) : x; } });   /* the note's own view (Find, ⌘F, needs its methods), dressed so the setter takes it: it refuses a MarkdownView */ app.workspace.activeEditor = aeInfo; }, 0); });
-      split.containerEl.addEventListener("focusout", e => { if (e.relatedTarget instanceof Node && split.containerEl.contains(e.relatedTarget)) return; window.setTimeout(() => { if (aeInfo && app.workspace._activeEditor === aeInfo && !split.containerEl.contains(document.activeElement)) app.workspace.activeEditor = null; aeInfo = null; }, 0); });
+                     (0.9.50). A click on the map hands it back to the map, as before */
+      let aeInfo =
+        null; /* Obsidian's active editor, the way Canvas sets it for its cards (a file info, not a view: our leaf has no tab group, so it can't be the active leaf) */
+      split.containerEl.addEventListener("focusin", () => {
+        if (Platform.isMobile) return;
+        window.setTimeout(() => {
+          const v = leaf && leaf.view;
+          if (
+            !v ||
+            !v.editor ||
+            !split.containerEl.contains(document.activeElement)
+          )
+            return;
+          aeInfo = new Proxy(v, {
+            getPrototypeOf: () => Object.prototype,
+            get: (t, k) => {
+              const x = Reflect.get(t, k, t);
+              return typeof x === "function" ? x.bind(t) : x;
+            },
+          });
+          /* the note's own view (Find, ⌘F, needs its methods), dressed so the setter takes it: it refuses a MarkdownView */ app.workspace.activeEditor =
+            aeInfo;
+        }, 0);
+      });
+      split.containerEl.addEventListener("focusout", (e) => {
+        if (
+          e.relatedTarget instanceof Node &&
+          split.containerEl.contains(e.relatedTarget)
+        )
+          return;
+        window.setTimeout(() => {
+          if (
+            aeInfo &&
+            app.workspace._activeEditor === aeInfo &&
+            !split.containerEl.contains(document.activeElement)
+          )
+            app.workspace.activeEditor = null;
+          aeInfo = null;
+        }, 0);
+      });
       // Shift-click on a link is the editor's own again (it extends the selection): ⌘-click opens a new orb, ⌘⌥-click the support note (0.8.189)
-      return { el: split.containerEl,
-        open: async path => { const f = app.vault.getAbstractFileByPath(path); if (!(f instanceof TFile)) return false;
-          if (!leaf) { leaf = W.createLeafInParent(split, 0); leaf.ivmCard = true; leaf.ivmOwner = this.leaf; }   // the map's own editor: never caught by keepNotesIn
-          await leaf.openFile(f, { state: { mode: "source", source: false }, active: false }); return true; },
-        resize: () => { if (leaf && leaf.view && typeof leaf.view.onResize === "function") leaf.view.onResize(); },
-        focus: () => { const ed = leaf && leaf.view && leaf.view.editor; if (ed) ed.focus(); },   // straight to the editor: our leaf has no tab group, so it can't be the workspace's active leaf
-        close: () => { if (leaf) { leaf.detach(); leaf = null; } split.containerEl.remove(); } }; },
+      return {
+        el: split.containerEl,
+        open: async (path) => {
+          const f = app.vault.getAbstractFileByPath(path);
+          if (!(f instanceof TFile)) return false;
+          if (!leaf) {
+            leaf = W.createLeafInParent(split, 0);
+            leaf.ivmCard = true;
+            leaf.ivmOwner = this.leaf;
+          } // the map's own editor: never caught by keepNotesIn
+          await leaf.openFile(f, {
+            state: { mode: "source", source: false },
+            active: false,
+          });
+          return true;
+        },
+        resize: () => {
+          if (leaf && leaf.view && typeof leaf.view.onResize === "function")
+            leaf.view.onResize();
+        },
+        focus: () => {
+          const ed = leaf && leaf.view && leaf.view.editor;
+          if (ed) ed.focus();
+        }, // straight to the editor: our leaf has no tab group, so it can't be the workspace's active leaf
+        close: () => {
+          if (leaf) {
+            leaf.detach();
+            leaf = null;
+          }
+          split.containerEl.remove();
+        },
+      };
+    },
     // a read-only preview of a note (Starfield's hub previews): its text without the properties, the start of it, rendered as Obsidian would
     /* the spot preview for a Links HUD row (0.9.114): the passage where `path` links to `ctx`, or the note's opening with the line that says why */
-    async spot(path, ctx, sub, body) { const info = spotInfo(app, path, ctx); if (sub) spotSub(sub, info); await spotRender(app, path, ctx, info, body, events, info.hit ? null : () => this.preview(path, body)); },
-    preview: async (path, el) => { const f = app.vault.getAbstractFileByPath(path); if (!(f instanceof TFile)) return;
-      const txt = (await app.vault.cachedRead(f)).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "")
-        .replace(/^([ \t>]*)(```|~~~)[^\n]*\n[\s\S]*?^\1\2[^\n]*$/gm, "").replace(/!\[\[[^\]\n]*?\.base(?:[#|][^\]\n]*)?\]\]/g, "")
-        .replace(/^>[ \t]*\[![^\]]+\][+-]?[^\n]*\n(?:>[ \t]*(?:\n|$))*(?=[^>]|$)/gm, "").replace(/\n{3,}/g, "\n\n").trim().slice(0, 1200);   // also inside callouts (0.8.179: a dataview list in a callout still rendered), and a callout left empty goes with it   // a preview opens on words: embedded bases, queries and code blocks are left out (they ran full queries in every small preview, 0.8.178)
-      await MarkdownRenderer.render(app, txt, el, path, events); },
+    async spot(path, ctx, sub, body) {
+      const info = spotInfo(app, path, ctx);
+      if (sub) spotSub(sub, info);
+      await spotRender(
+        app,
+        path,
+        ctx,
+        info,
+        body,
+        events,
+        info.hit ? null : () => this.preview(path, body),
+      );
+    },
+    preview: async (path, el) => {
+      const f = app.vault.getAbstractFileByPath(path);
+      if (!(f instanceof TFile)) return;
+      const txt = (await app.vault.cachedRead(f))
+        .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "")
+        .replace(/^([ \t>]*)(```|~~~)[^\n]*\n[\s\S]*?^\1\2[^\n]*$/gm, "")
+        .replace(/!\[\[[^\]\n]*?\.base(?:[#|][^\]\n]*)?\]\]/g, "")
+        .replace(
+          /^>[ \t]*\[![^\]]+\][+-]?[^\n]*\n(?:>[ \t]*(?:\n|$))*(?=[^>]|$)/gm,
+          "",
+        )
+        .replace(/\n{3,}/g, "\n\n")
+        .trim()
+        .slice(0, 1200); // also inside callouts (0.8.179: a dataview list in a callout still rendered), and a callout left empty goes with it   // a preview opens on words: embedded bases, queries and code blocks are left out (they ran full queries in every small preview, 0.8.178)
+      await MarkdownRenderer.render(app, txt, el, path, events);
+    },
     // the map reacting as you write (0.8.23): when Obsidian has re-read a note's links, hand the map that note's links, resolved, each with its kind
     // (0 in the text, 1 up, 4 related, 5 any other property; collections are left to a rescan)
     // a link dragged onto a note's dot (0.8.185): into its related (or up) property, as a quoted [[link]], once
-    addLink: async (targetPath, linkPath, kind) => { const t = app.vault.getAbstractFileByPath(targetPath), l = app.vault.getAbstractFileByPath(linkPath); if (!(t instanceof TFile) || !(l instanceof TFile)) return false;
-      if (kind === "bullet" || kind === "head") { const lt = app.metadataCache.fileToLinktext(l, t.path, true), link = `[[${lt}]]`; let dup = false;   // in the note's text (0.8.189): top (after the properties), top as a bullet, or bottom
-        await app.vault.process(t, txt => { const m = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/.exec(txt), head = m ? m[0] : "", body = txt.slice(head.length);
-          if (body.includes(`[[${lt}]]`) || body.includes(`[[${lt}|`)) { dup = true; return txt; }
-          if (kind === "head") { const H = "###### Links added via Maps of the Ideaverse", at = body.search(/^###### Links added via Maps of the Ideaverse[ \t]*$/m);   // one small heading at the top, the newest link first under it (0.8.195)
-            if (at >= 0) { const e_ = body.indexOf("\n", at); return head + (e_ < 0 ? body + "\n- " + link : body.slice(0, e_ + 1) + `- ${link}\n` + body.slice(e_ + 1)); }
-            const b = body.replace(/^\n+/, ""); return head + `${H}\n- ${link}\n` + (b ? "\n" + b : ""); }
-          const line = `- ${link}`, b = body.replace(/^\n+/, ""), joinB = /^- /.test(b) ? "\n" : "\n\n";
-          return head + line + (b ? joinB + b : "\n"); }); return dup ? "dup" : true; }
-      const st = plugin.settings, names = v => (Array.isArray(v) ? v : String(v || "").split(",")).map(x => String(x).trim()).filter(Boolean), key = (kind === "up" ? names(st.upProps)[0] : names(st.relatedProps)[0]) || kind;
-      const link = `[[${app.metadataCache.fileToLinktext(l, t.path, true)}]]`, base = s_ => String(s_).replace(/^\[\[|\]\]$/g, "").split("|")[0].trim();
-      let dup = false; await app.fileManager.processFrontMatter(t, fm => { const k = Object.keys(fm).find(x => x.toLowerCase() === key.toLowerCase()) || key; const cur = fm[k] == null || fm[k] === "" ? [] : Array.isArray(fm[k]) ? fm[k] : [fm[k]];
-        if (cur.some(x => base(x) === base(link))) { dup = true; return; } fm[k] = [...cur, link]; }); return dup ? "dup" : true; },
+    addLink: async (targetPath, linkPath, kind) => {
+      const t = app.vault.getAbstractFileByPath(targetPath),
+        l = app.vault.getAbstractFileByPath(linkPath);
+      if (!(t instanceof TFile) || !(l instanceof TFile)) return false;
+      if (kind === "bullet" || kind === "head") {
+        const lt = app.metadataCache.fileToLinktext(l, t.path, true),
+          link = `[[${lt}]]`;
+        let dup = false; // in the note's text (0.8.189): top (after the properties), top as a bullet, or bottom
+        await app.vault.process(t, (txt) => {
+          const m = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/.exec(txt),
+            head = m ? m[0] : "",
+            body = txt.slice(head.length);
+          if (body.includes(`[[${lt}]]`) || body.includes(`[[${lt}|`)) {
+            dup = true;
+            return txt;
+          }
+          if (kind === "head") {
+            const H = "###### Links added via Maps of the Ideaverse",
+              at = body.search(
+                /^###### Links added via Maps of the Ideaverse[ \t]*$/m,
+              ); // one small heading at the top, the newest link first under it (0.8.195)
+            if (at >= 0) {
+              const e_ = body.indexOf("\n", at);
+              return (
+                head +
+                (e_ < 0
+                  ? body + "\n- " + link
+                  : body.slice(0, e_ + 1) + `- ${link}\n` + body.slice(e_ + 1))
+              );
+            }
+            const b = body.replace(/^\n+/, "");
+            return head + `${H}\n- ${link}\n` + (b ? "\n" + b : "");
+          }
+          const line = `- ${link}`,
+            b = body.replace(/^\n+/, ""),
+            joinB = /^- /.test(b) ? "\n" : "\n\n";
+          return head + line + (b ? joinB + b : "\n");
+        });
+        return dup ? "dup" : true;
+      }
+      const st = plugin.settings,
+        names = (v) =>
+          (Array.isArray(v) ? v : String(v || "").split(","))
+            .map((x) => String(x).trim())
+            .filter(Boolean),
+        key =
+          (kind === "up" ? names(st.upProps)[0] : names(st.relatedProps)[0]) ||
+          kind;
+      const link = `[[${app.metadataCache.fileToLinktext(l, t.path, true)}]]`,
+        base = (s_) =>
+          String(s_)
+            .replace(/^\[\[|\]\]$/g, "")
+            .split("|")[0]
+            .trim();
+      let dup = false;
+      await app.fileManager.processFrontMatter(t, (fm) => {
+        const k =
+          Object.keys(fm).find((x) => x.toLowerCase() === key.toLowerCase()) ||
+          key;
+        const cur =
+          fm[k] == null || fm[k] === ""
+            ? []
+            : Array.isArray(fm[k])
+              ? fm[k]
+              : [fm[k]];
+        if (cur.some((x) => base(x) === base(link))) {
+          dup = true;
+          return;
+        }
+        fm[k] = [...cur, link];
+      });
+      return dup ? "dup" : true;
+    },
     // the folder in the editor strip, clicked (0.8.188): move the note to another folder, the way Obsidian's "Move file to…" does
-    moveNote: async path => { const f = app.vault.getAbstractFileByPath(path); if (!(f instanceof TFile)) return false;
-      const dir = await new Promise(res => new FolderPicker(app, res, `Move "${f.basename}" to…`, true).open()); if (!dir) return false;
-      const d = dir === "/" ? "" : normalizePath(dir); if (d && !app.vault.getAbstractFileByPath(d)) await app.vault.createFolder(d);
-      const to = normalizePath(d ? `${d}/${f.name}` : f.name); if (to === f.path) return false; if (app.vault.getAbstractFileByPath(to)) { new Notice(`There's already a ${f.name} in ${d || "the vault root"}.`); return false; }
-      await app.fileManager.renameFile(f, to); return true; },
+    moveNote: async (path) => {
+      const f = app.vault.getAbstractFileByPath(path);
+      if (!(f instanceof TFile)) return false;
+      const dir = await new Promise((res) =>
+        new FolderPicker(app, res, `Move "${f.basename}" to…`, true).open(),
+      );
+      if (!dir) return false;
+      const d = dir === "/" ? "" : normalizePath(dir);
+      if (d && !app.vault.getAbstractFileByPath(d))
+        await app.vault.createFolder(d);
+      const to = normalizePath(d ? `${d}/${f.name}` : f.name);
+      if (to === f.path) return false;
+      if (app.vault.getAbstractFileByPath(to)) {
+        new Notice(`There's already a ${f.name} in ${d || "the vault root"}.`);
+        return false;
+      }
+      await app.fileManager.renameFile(f, to);
+      return true;
+    },
     // Obsidian's own Close tab and Toggle pin commands, answered by the map while its editor has a note (0.8.196)
-    onTabCmd: cb => { const W = /** @type {any} */ (app).commands; if (!W || !W.commands) return; plugin.tabCmds ||= new Set(); plugin.tabCmds.add(cb); events.register(() => plugin.tabCmds.delete(cb));
-      if (plugin.tabCmdPatched) return; plugin.tabCmdPatched = true;
-      for (const [id, what] of [["workspace:close", "close"], ["workspace:toggle-pin", "pin"], ["workspace:undo-close-pane", "reopen"], ["workspace:new-tab", "new"], ["workspace:close-others", "others"]]) { const c = W.commands[id]; if (!c) continue; const oc = c.checkCallback, ob = c.callback;
-        c.checkCallback = checking => { for (const f of plugin.tabCmds || []) if (f(what, true)) { if (!checking) f(what, false); return true; } return oc ? oc.call(c, checking) : ob ? (checking || ob.call(c), true) : false; };
+    onTabCmd: (cb) => {
+      const W = /** @type {any} */ (app).commands;
+      if (!W || !W.commands) return;
+      plugin.tabCmds ||= new Set();
+      plugin.tabCmds.add(cb);
+      events.register(() => plugin.tabCmds.delete(cb));
+      if (plugin.tabCmdPatched) return;
+      plugin.tabCmdPatched = true;
+      for (const [id, what] of [
+        ["workspace:close", "close"],
+        ["workspace:toggle-pin", "pin"],
+        ["workspace:undo-close-pane", "reopen"],
+        ["workspace:new-tab", "new"],
+        ["workspace:close-others", "others"],
+      ]) {
+        const c = W.commands[id];
+        if (!c) continue;
+        const oc = c.checkCallback,
+          ob = c.callback;
+        c.checkCallback = (checking) => {
+          for (const f of plugin.tabCmds || [])
+            if (f(what, true)) {
+              if (!checking) f(what, false);
+              return true;
+            }
+          return oc
+            ? oc.call(c, checking)
+            : ob
+              ? (checking || ob.call(c), true)
+              : false;
+        };
         if (ob) c.callback = undefined;
-        plugin.register(() => { c.checkCallback = oc; c.callback = ob; plugin.tabCmdPatched = false; }); } },
-    linkColors: () => { if (plugin.linkColorsRun) plugin.linkColorsRun(); },
+        plugin.register(() => {
+          c.checkCallback = oc;
+          c.callback = ob;
+          plugin.tabCmdPatched = false;
+        });
+      }
+    },
+    linkColors: () => {
+      if (plugin.linkColorsRun) plugin.linkColorsRun();
+    },
     /* what's being dragged in from Obsidian (0.9.54): a tab, a file (file list, search results), several files, or a link; markdown notes only */
     /* a place on this map where a dragged tab should land with us, not split Obsidian's layout (0.9.57) */
-    registerDropZone: fn => { if (!plugin.dropBlocks) plugin.dropBlocks = new Set(); plugin.dropBlocks.add(fn); events.register(() => { plugin.dropBlocks.delete(fn); }); },
+    registerDropZone: (fn) => {
+      if (!plugin.dropBlocks) plugin.dropBlocks = new Set();
+      plugin.dropBlocks.add(fn);
+      events.register(() => {
+        plugin.dropBlocks.delete(fn);
+      });
+    },
     /* a HUD row dragged as Obsidian drags a file from its list (0.9.73): onto the Holodeck's tabs, the primary or support note, or anywhere Obsidian takes a file */
-    dragNote: (e, path) => { const f = app.vault.getAbstractFileByPath(path), dm = app.dragManager; if (!(f instanceof TFile) || !dm || typeof dm.dragFile !== "function") return false; const d = dm.dragFile(e, f); if (!d) return false; if (dm.draggable && typeof dm.onDragEnd === "function") { try { dm.onDragEnd(e); } catch (_) { /* a stale drag */ } } dm.onDragStart(e, d);
+    dragNote: (e, path) => {
+      const f = app.vault.getAbstractFileByPath(path),
+        dm = app.dragManager;
+      if (!(f instanceof TFile) || !dm || typeof dm.dragFile !== "function")
+        return false;
+      const d = dm.dragFile(e, f);
+      if (!d) return false;
+      if (dm.draggable && typeof dm.onDragEnd === "function") {
+        try {
+          dm.onDragEnd(e);
+        } catch (_) {
+          /* a stale drag */
+        }
+      }
+      dm.onDragStart(e, d);
       /* the HUD redraws during a drag, so its row can leave the page; dragend then never reaches Obsidian's window listener and the drag ghost sticks. Hand it over ourselves */
-      const el = e.target; if (el instanceof HTMLElement) el.addEventListener("dragend", ev => { if (dm.draggable && typeof dm.onDragEnd === "function") { try { dm.onDragEnd(ev); } catch (_) { /* already clean */ } } }, { once: true }); return true; },
-    dragSource: () => { const md = f => f instanceof TFile && f.extension === "md";
-      const lf = plugin.dragLeaf; if (lf && lf.view && md(lf.view.file) && !lf.ivmCard) return { paths: [lf.view.file.path], leaf: lf };
-      const dm = app.dragManager, d = dm && dm.draggable; if (!d) return null; const out = [];
-      if (d.type === "file" && md(d.file)) out.push(d.file.path); else if (d.type === "files") { for (const f of d.files || []) if (md(f)) out.push(f.path); } else if (d.type === "link" && md(d.file)) out.push(d.file.path);
-      return out.length ? { paths: out, leaf: null } : null; },
+      const el = e.target;
+      if (el instanceof HTMLElement)
+        el.addEventListener(
+          "dragend",
+          (ev) => {
+            if (dm.draggable && typeof dm.onDragEnd === "function") {
+              try {
+                dm.onDragEnd(ev);
+              } catch (_) {
+                /* already clean */
+              }
+            }
+          },
+          { once: true },
+        );
+      return true;
+    },
+    dragSource: () => {
+      const md = (f) => f instanceof TFile && f.extension === "md";
+      const lf = plugin.dragLeaf;
+      if (lf && lf.view && md(lf.view.file) && !lf.ivmCard)
+        return { paths: [lf.view.file.path], leaf: lf };
+      const dm = app.dragManager,
+        d = dm && dm.draggable;
+      if (!d) return null;
+      const out = [];
+      if (d.type === "file" && md(d.file)) out.push(d.file.path);
+      else if (d.type === "files") {
+        for (const f of d.files || []) if (md(f)) out.push(f.path);
+      } else if (d.type === "link" && md(d.file)) out.push(d.file.path);
+      return out.length ? { paths: out, leaf: null } : null;
+    },
     /* while a drag is over the map's own drop targets, Obsidian's tab-drop preview stays out of sight; it cleans itself up when the drag ends */
-    dragQuiet: () => { try { const dm = app.dragManager; if (dm && dm.hideOverlay) dm.hideOverlay(); } catch (_) { /* not there */ }
-      for (const o of document.querySelectorAll(".workspace-fake-target-overlay")) o.hide();
-      for (const o of document.querySelectorAll(".workspace-fake-target-container")) o.remove();   /* removed, not hidden: Obsidian puts it back if the drag goes on over its own panes */
-      for (const o of document.querySelectorAll(".workspace-leaf, .workspace-tabs, .workspace-split")) if (o instanceof HTMLElement && o.style.opacity === "0") o.style.removeProperty("opacity"); },
+    dragQuiet: () => {
+      try {
+        const dm = app.dragManager;
+        if (dm && dm.hideOverlay) dm.hideOverlay();
+      } catch (_) {
+        /* not there */
+      }
+      for (const o of document.querySelectorAll(
+        ".workspace-fake-target-overlay",
+      ))
+        o.hide();
+      for (const o of document.querySelectorAll(
+        ".workspace-fake-target-container",
+      ))
+        o.remove(); /* removed, not hidden: Obsidian puts it back if the drag goes on over its own panes */
+      for (const o of document.querySelectorAll(
+        ".workspace-leaf, .workspace-tabs, .workspace-split",
+      ))
+        if (o instanceof HTMLElement && o.style.opacity === "0")
+          o.style.removeProperty("opacity");
+    },
     /* a tab dragged into the map moves there: it leaves Obsidian's tab bar, unless it's the only tab left in the main area */
-    dragMoved: leaf => { window.setTimeout(() => { try { if (!leaf || leaf === this.leaf || leaf.ivmCard) return; const W = app.workspace; let n = 0; W.iterateRootLeaves(() => { n++; }); if (leaf.getRoot() === W.rootSplit && n <= 1) return; leaf.detach(); } catch (_) { /* already gone */ } }, 60); },
-    collectionKeys: () => { const v = plugin.settings.collectionProps; return (Array.isArray(v) ? v : String(v || "collections").split(",")).map(x => String(x).trim().toLowerCase()).filter(Boolean); },
+    dragMoved: (leaf) => {
+      window.setTimeout(() => {
+        try {
+          if (!leaf || leaf === this.leaf || leaf.ivmCard) return;
+          const W = app.workspace;
+          let n = 0;
+          W.iterateRootLeaves(() => {
+            n++;
+          });
+          if (leaf.getRoot() === W.rootSplit && n <= 1) return;
+          leaf.detach();
+        } catch (_) {
+          /* already gone */
+        }
+      }, 60);
+    },
+    collectionKeys: () => {
+      const v = plugin.settings.collectionProps;
+      return (Array.isArray(v) ? v : String(v || "collections").split(","))
+        .map((x) => String(x).trim().toLowerCase())
+        .filter(Boolean);
+    },
     /* a note's property links with the property each sits in (0.8.297: the Links HUD groups them by property), as [key, target path] */
-    propLinks: path => { const f = app.vault.getAbstractFileByPath(path), c = f instanceof TFile ? app.metadataCache.getFileCache(f) : null, out = []; if (!c) return out;
-      for (const l of c.frontmatterLinks || []) { const t = app.metadataCache.getFirstLinkpathDest(String(l.link || "").split("#")[0], path); if (t instanceof TFile) out.push([String(l.key || "").split(".")[0].trim().toLowerCase(), t.path]); } return out; },
-    linkTargets: path => { const f = app.vault.getAbstractFileByPath(path), c = f instanceof TFile ? app.metadataCache.getFileCache(f) : null, out = []; if (!c) return out;   /* what each link in a note shows, and the note it reaches (0.8.224: the editor colors links by relation) */
-      for (const l of [...(c.links || []), ...(c.embeds || []), ...(c.frontmatterLinks || [])]) { const base = String(l.link || "").split("#")[0], t = app.metadataCache.getFirstLinkpathDest(base, path); if (!(t instanceof TFile)) continue;
-        for (const key of [l.displayText, l.link, base, t.basename]) if (key) out.push([String(key).trim().toLowerCase(), t.path]); } return out; },
-    onMove: cb => { events.registerEvent(app.vault.on("rename", (f, old) => { if (f instanceof TFile && f.extension === "md" && old) cb(old, f.path); })); },   // a note moved or renamed: the map moves it live
-    onLinks: cb => { const st = plugin.settings, nm = (v, d) => (Array.isArray(v) ? v : String(v || d).split(",")).map(x => String(x).trim().toLowerCase()).filter(Boolean);
-      events.registerEvent(app.metadataCache.on("changed", (f, _data, c) => { if (!(f instanceof TFile) || !c) return;
-        const UP = nm(st.upProps, "up"), RL = nm(st.relatedProps, "related"), CL = nm(st.collectionProps, "collections"), L = [];
-        const res = l => { const t = app.metadataCache.getFirstLinkpathDest(String(l).split("#")[0].split("|")[0], f.path); return t instanceof TFile && t.extension === "md" ? t.path : null; };
-        for (const l of [...(c.links || []), ...(c.embeds || [])]) { const q = res(l.link); if (q) L.push([q, 0]); }
-        for (const l of c.frontmatterLinks || []) { const k = String(l.key || "").split(".")[0].toLowerCase(); if (CL.includes(k)) continue; const q = res(l.link); if (q) L.push([q, UP.includes(k) ? 1 : RL.includes(k) ? 4 : 5]); }
-        cb(f.path, L); })); },
-    pickNote: (items, ph) => new Promise(res => new NotePicker(app, items, res, ph).open()),
-    activePath: () => { const f = app.workspace.getActiveFile(); return f ? f.path : null; },
+    propLinks: (path) => {
+      const f = app.vault.getAbstractFileByPath(path),
+        c = f instanceof TFile ? app.metadataCache.getFileCache(f) : null,
+        out = [];
+      if (!c) return out;
+      for (const l of c.frontmatterLinks || []) {
+        const t = app.metadataCache.getFirstLinkpathDest(
+          String(l.link || "").split("#")[0],
+          path,
+        );
+        if (t instanceof TFile)
+          out.push([
+            String(l.key || "")
+              .split(".")[0]
+              .trim()
+              .toLowerCase(),
+            t.path,
+          ]);
+      }
+      return out;
+    },
+    linkTargets: (path) => {
+      const f = app.vault.getAbstractFileByPath(path),
+        c = f instanceof TFile ? app.metadataCache.getFileCache(f) : null,
+        out = [];
+      if (!c)
+        return out; /* what each link in a note shows, and the note it reaches (0.8.224: the editor colors links by relation) */
+      for (const l of [
+        ...(c.links || []),
+        ...(c.embeds || []),
+        ...(c.frontmatterLinks || []),
+      ]) {
+        const base = String(l.link || "").split("#")[0],
+          t = app.metadataCache.getFirstLinkpathDest(base, path);
+        if (!(t instanceof TFile)) continue;
+        for (const key of [l.displayText, l.link, base, t.basename])
+          if (key) out.push([String(key).trim().toLowerCase(), t.path]);
+      }
+      return out;
+    },
+    onMove: (cb) => {
+      events.registerEvent(
+        app.vault.on("rename", (f, old) => {
+          if (f instanceof TFile && f.extension === "md" && old)
+            cb(old, f.path);
+        }),
+      );
+    }, // a note moved or renamed: the map moves it live
+    onLinks: (cb) => {
+      const st = plugin.settings,
+        nm = (v, d) =>
+          (Array.isArray(v) ? v : String(v || d).split(","))
+            .map((x) => String(x).trim().toLowerCase())
+            .filter(Boolean);
+      events.registerEvent(
+        app.metadataCache.on("changed", (f, _data, c) => {
+          if (!(f instanceof TFile) || !c) return;
+          const UP = nm(st.upProps, "up"),
+            RL = nm(st.relatedProps, "related"),
+            CL = nm(st.collectionProps, "collections"),
+            L = [];
+          const res = (l) => {
+            const t = app.metadataCache.getFirstLinkpathDest(
+              String(l).split("#")[0].split("|")[0],
+              f.path,
+            );
+            return t instanceof TFile && t.extension === "md" ? t.path : null;
+          };
+          for (const l of [...(c.links || []), ...(c.embeds || [])]) {
+            const q = res(l.link);
+            if (q) L.push([q, 0]);
+          }
+          for (const l of c.frontmatterLinks || []) {
+            const k = String(l.key || "")
+              .split(".")[0]
+              .toLowerCase();
+            if (CL.includes(k)) continue;
+            const q = res(l.link);
+            if (q) L.push([q, UP.includes(k) ? 1 : RL.includes(k) ? 4 : 5]);
+          }
+          cb(f.path, L);
+        }),
+      );
+    },
+    pickNote: (items, ph) =>
+      new Promise((res) => new NotePicker(app, items, res, ph).open()),
+    activePath: () => {
+      const f = app.workspace.getActiveFile();
+      return f ? f.path : null;
+    },
     debug: (owner.debug = {}),
   });
-  if (!owner.fileHooked) { owner.fileHooked = true; owner.registerEvent(app.workspace.on("file-open", file => { if (owner.map && file) owner.map.follow(file.path); })); }
-  if (!owner.cssHooked) { owner.cssHooked = true; owner.registerEvent(app.workspace.on("css-change", () => { if (owner.map) owner.map.themeChanged(); })); }
+  if (!owner.fileHooked) {
+    owner.fileHooked = true;
+    owner.registerEvent(
+      app.workspace.on("file-open", (file) => {
+        if (owner.map && file) owner.map.follow(file.path);
+      }),
+    );
+  }
+  if (!owner.cssHooked) {
+    owner.cssHooked = true;
+    owner.registerEvent(
+      app.workspace.on("css-change", () => {
+        if (owner.map) owner.map.themeChanged();
+      }),
+    );
+  }
   return map;
 }

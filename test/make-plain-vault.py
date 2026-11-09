@@ -1,6 +1,12 @@
 # A plain vault: no ACE folders, no frontmatter conventions, wiki links only.
-import os, random, datetime, sys
-random.seed(3); V = sys.argv[1]; N = int(sys.argv[2])
+import datetime
+import os
+import random
+import sys
+
+random.seed(3)
+V = sys.argv[1]
+N = int(sys.argv[2])
 words = "alpha beta gamma delta river stone cloud forest lamp book coffee music chess garden kitchen travel".split()
 fold = ["Projects", "Reading", "Journal", "Ideas", "Work/Meetings", "Work/Clients", ""]
 names = []
